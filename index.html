@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xero</title>
+<!--
+  HOW TO RUN (VS Code):
+  1. File > Open Folder, pick the folder containing this file.
+  2. Install the "Live Server" extension.
+  3. Right-click index.html > "Open with Live Server".
+
+  NOTE: accounts and videos are saved inside YOUR browser (localStorage + IndexedDB).
+  That means it works great for building and testing, but other people can't see your
+  videos yet. To make Xero public you need a backend (server + database + file storage).
+-->
+<style>
+  :root { --bg:#eef0f6; --card:#fff; --ink:#12141f; --mute:#6b6f85; --line:#dcdfeb; --blue:#2b3cff; --coral:#ff5a4d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1019; --card:#171a28; --ink:#eceefb; --mute:#9296b0; --line:#272b40; --blue:#6f7bff; --coral:#ff7a6e; }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; }
+  button { font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+  input, textarea { font:inherit; color:inherit; }
+  :focus-visible { outline:3px solid var(--blue); outline-offset:2px; }
+  a { color:inherit; text-decoration:none; }
+
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:16px; padding:12px 24px;
+    background:var(--card); border-bottom:2px solid var(--ink); }
+  .logo { display:flex; align-items:center; gap:10px; font-size:26px; font-weight:900; letter-spacing:-1px; }
+  .ring { width:28px; height:28px; border:6px solid var(--blue); border-radius:50%; position:relative; }
+  .ring::after { content:""; position:absolute; left:50%; top:-7px; width:5px; height:28px; background:var(--coral);
+    transform:translateX(-50%) rotate(35deg); border-radius:3px; }
+  .search { flex:1; max-width:480px; margin:0 auto; }
+  .search input { width:100%; padding:10px 18px; border-radius:999px; border:2px solid var(--line); background:var(--bg); }
+  .btn { padding:10px 18px; border-radius:10px; font-weight:700; border:2px solid var(--ink); }
+  .btn.fill { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .btn.coral { background:var(--coral); color:#fff; border-color:var(--coral); }
+  .who { display:flex; align-items:center; gap:10px; font-weight:600; }
+  .av { width:34px; height:34px; border-radius:50%; background:var(--coral); color:#fff; display:grid; place-items:center; font-weight:800; }
+
+  .chips { display:flex; gap:8px; padding:18px 24px 4px; }
+  .chip { padding:7px 16px; border-radius:999px; border:2px solid var(--line); font-weight:600; }
+  .chip.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:22px; padding:18px 24px 60px; }
+  .card { cursor:pointer; }
+  .thumb { aspect-ratio:4/3; border-radius:18px 18px 18px 4px; background:linear-gradient(135deg,var(--blue),var(--coral));
+    background-size:cover; background-position:center; position:relative; overflow:hidden; border:2px solid var(--ink); }
+  .dur { position:absolute; right:8px; bottom:8px; background:var(--ink); color:var(--bg); font-size:12px; font-weight:700; padding:2px 7px; border-radius:6px; }
+  .card:hover .thumb { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink); }
+  .thumb { transition:transform .12s, box-shadow .12s; }
+  .card h3 { margin:10px 2px 2px; font-size:16px; line-height:1.3; }
+  .meta { color:var(--mute); font-size:13px; margin:0 2px; }
+  .empty { grid-column:1/-1; text-align:center; padding:80px 20px; color:var(--mute); }
+  .empty h2 { color:var(--ink); font-size:28px; margin-bottom:8px; }
+
+  .watch { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:28px; padding:24px; max-width:1300px; margin:0 auto; }
+  video { width:100%; border-radius:16px; background:#000; border:2px solid var(--ink); max-height:70vh; }
+  .watch h1 { font-size:22px; margin:14px 0 8px; }
+  .bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .bar .meta { flex:1; font-size:14px; }
+  .like.on { background:var(--coral); color:#fff; border-color:var(--coral); }
+  .desc { background:var(--card); border-radius:14px; padding:14px; margin:14px 0; white-space:pre-wrap; border:2px solid var(--line); }
+  .comments h3 { margin:18px 0 10px; }
+  .cform { display:flex; gap:10px; margin-bottom:16px; }
+  .cform input { flex:1; padding:10px 14px; border-radius:10px; border:2px solid var(--line); background:var(--card); }
+  .c { padding:10px 0; border-top:1px solid var(--line); }
+  .c b { margin-right:8px; } .c small { color:var(--mute); }
+  .next h3 { margin-bottom:12px; }
+  .mini { display:grid; grid-template-columns:130px 1fr; gap:10px; margin-bottom:14px; cursor:pointer; }
+  .mini .thumb { aspect-ratio:4/3; border-radius:10px 10px 10px 3px; }
+  .mini h4 { font-size:14px; line-height:1.3; }
+
+  .back { position:fixed; inset:0; background:rgba(8,10,20,.6); display:none; place-items:center; z-index:20; padding:16px; }
+  .back.open { display:grid; }
+  .modal { background:var(--card); border:2px solid var(--ink); border-radius:20px; padding:26px; width:min(430px,100%); box-shadow:8px 8px 0 var(--ink); }
+  .modal h2 { margin-bottom:4px; font-size:24px; }
+  .modal p.sub { color:var(--mute); margin-bottom:14px; }
+  .modal label { display:block; font-size:13px; font-weight:700; margin:12px 0 4px; }
+  .modal input, .modal textarea { width:100%; padding:10px 12px; border-radius:10px; border:2px solid var(--line); background:var(--bg); }
+  .modal textarea { height:80px; resize:vertical; }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .tabs button { flex:1; padding:9px; border-radius:10px; border:2px solid var(--line); font-weight:700; }
+  .tabs button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .err { color:var(--coral); font-weight:600; min-height:20px; margin-top:10px; font-size:14px; }
+  .row { display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+
+  .studio { max-width:1100px; margin:0 auto; padding:28px 24px 60px; }
+  .studio h1 { font-size:26px; margin-bottom:4px; }
+  .studio .lead { color:var(--mute); margin-bottom:24px; }
+  .sgrid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:36px; align-items:start; }
+  .drop { display:grid; place-content:center; text-align:center; gap:6px; aspect-ratio:16/10; border:2px dashed var(--mute);
+    border-radius:14px; cursor:pointer; padding:20px; color:var(--mute); }
+  .drop strong { font-size:18px; color:var(--ink); }
+  .drop:hover, .drop.over { border-color:var(--blue); background:var(--card); }
+  .drop[hidden], #pv[hidden], #swap[hidden] { display:none; }
+  #pv { width:100%; border-radius:12px; margin-bottom:12px; }
+  .field { margin-bottom:20px; }
+  .field label, .lbl { display:flex; justify-content:space-between; font-weight:700; font-size:14px; margin-bottom:6px; }
+  .field small { font-weight:500; color:var(--mute); }
+  .field input, .field textarea { width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line); background:var(--card); }
+  .field textarea { height:110px; resize:vertical; }
+  .tstrip { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .tpick { aspect-ratio:4/3; border-radius:8px; border:2px solid var(--line); background:var(--card) center/cover; color:var(--mute);
+    font-size:12px; font-weight:600; cursor:pointer; padding:4px; }
+  .tpick[aria-pressed="true"] { border-color:var(--blue); box-shadow:0 0 0 2px var(--blue); }
+  .tpick.add { border-style:dashed; }
+  .pcard { width:260px; max-width:100%; cursor:default; }
+  .pcard:hover .thumb { transform:none; box-shadow:none; }
+  .pubrow { display:flex; align-items:center; gap:12px; margin-top:22px; }
+  .av { overflow:hidden; flex:none; } .av img { width:100%; height:100%; object-fit:cover; }
+  .av.lg { width:96px; height:96px; font-size:40px; }
+  #avBtn { display:block; border-radius:50%; }
+  .menu { position:relative; }
+  .dd { position:absolute; right:0; top:46px; background:var(--card); border:2px solid var(--ink); border-radius:12px; min-width:200px; padding:6px; z-index:30; display:none; }
+  .dd.open { display:block; }
+  .dd a, .dd button { display:block; width:100%; text-align:left; padding:9px 12px; border-radius:8px; font-weight:600; }
+  .dd a:hover, .dd button:hover { background:var(--bg); }
+  .who2 { padding:8px 12px 10px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+  .chips { flex-wrap:wrap; }
+  .cinfo { display:flex; gap:10px; margin-top:10px; }
+  .cinfo .av { width:36px; height:36px; font-size:14px; cursor:pointer; }
+  .cinfo h3 { margin:0 0 2px; }
+  .ban { height:180px; background:linear-gradient(120deg,var(--blue),var(--coral)) center/cover; border-bottom:2px solid var(--ink); }
+  .chead { max-width:1100px; margin:0 auto; padding:20px 24px 0; display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  .chead h1 { font-size:28px; }
+  .prow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .c { display:flex; gap:12px; }
+  .c .av { width:34px; height:34px; font-size:14px; cursor:pointer; }
+  .cdel { color:var(--mute); font-size:12px; margin-left:8px; }
+  @media (max-width:900px) { .watch { grid-template-columns:1fr; } .search { display:none; } header { padding:10px 14px; } .grid { padding:14px; } .sgrid { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="#/" class="logo" aria-label="Xero home"><span class="ring"></span>Xero</a>
+  <div class="search"><input id="q" type="search" placeholder="Search Xero" aria-label="Search videos"></div>
+  <button class="btn fill" id="uploadBtn">Upload</button>
+  <div id="acct"></div>
+</header>
+
+<div id="app"></div>
+
+<!-- sign in / sign up -->
+<div class="back" id="authBack">
+  <form class="modal" id="authForm">
+    <h2 id="authTitle">Welcome to Xero</h2>
+    <p class="sub" id="authSub">Sign in to upload, like and comment.</p>
+    <div class="tabs">
+      <button type="button" id="tabIn" class="on">Sign in</button>
+      <button type="button" id="tabUp">Create account</button>
+    </div>
+    <label for="u">Username</label><input id="u" autocomplete="username" maxlength="20" required>
+    <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" minlength="6" required>
+    <div class="err" id="authErr" role="alert"></div>
+    <div class="row"><button type="button" class="btn" id="authCancel">Cancel</button><button class="btn fill" id="authGo">Sign in</button></div>
+  </form>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls = {
+  get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+const ago = t => { const s = (Date.now() - t) / 1000;
+  for (const [n, u] of [[31536000,"year"],[2592000,"month"],[86400,"day"],[3600,"hour"],[60,"minute"]])
+    if (s >= n) { const v = Math.floor(s / n); return v + " " + u + (v > 1 ? "s" : "") + " ago"; }
+  return "just now"; };
+const fmt = d => { d = Math.round(d || 0); return Math.floor(d / 60) + ":" + String(d % 60).padStart(2, "0"); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// identifies this browser, so signed-out viewers can't re-count themselves by refreshing
+const device = (() => { let d = ls.get("xero_device", null); if (!d) { d = uid(); ls.set("xero_device", d); } return d; })();
+
+// profiles (name, picture, banner, bio) and subscriptions
+let _u = null;
+const users = () => _u || (_u = ls.get("xero_users", {}));
+const prof = u => users()[String(u).toLowerCase()] || {};
+const dn = u => prof(u).display || u;
+const av = (u, big) => { const p = prof(u);
+  return `<span class="av${big ? " lg" : ""}">${p.pfp ? `<img src="${p.pfp}" alt="">` : esc((dn(u)[0] || "?").toUpperCase())}</span>`; };
+const subMap = () => ls.get("xero_subs", {});
+const subs = c => subMap()[c] || [];
+const subsOf = u => { const m = subMap(); return Object.keys(m).filter(c => m[c].includes(u)); };
+const subLabel = c => { const n = subs(c).length; return n + " subscriber" + (n === 1 ? "" : "s"); };
+function toggleSub(c) {
+  if (!me) { openAuth("Sign in to subscribe."); return false; }
+  const m = subMap(), l = m[c] || [];
+  m[c] = l.includes(me) ? l.filter(x => x !== me) : [...l, me]; ls.set("xero_subs", m); return true;
+}
+
+/* ---------- storage: metadata + video files in IndexedDB ---------- */
+const dbp = new Promise((res, rej) => {
+  const r = indexedDB.open("xero", 1);
+  r.onupgradeneeded = () => { r.result.createObjectStore("meta", { keyPath: "id" }); r.result.createObjectStore("blobs"); };
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+async function idb(store, mode, fn) {
+  const d = await dbp;
+  return new Promise((res, rej) => {
+    const t = d.transaction(store, mode), q = fn(t.objectStore(store));
+    t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error);
+  });
+}
+
+/* ---------- accounts (demo-grade: stored locally, password hashed) ---------- */
+let me = ls.get("xero_session", null);
+async function hash(pw, salt) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + pw));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+async function signUp(name, pw) {
+  const users = ls.get("xero_users", {});
+  if (users[name.toLowerCase()]) throw new Error("That username is taken.");
+  const salt = uid();
+  users[name.toLowerCase()] = { name, salt, h: await hash(pw, salt), at: Date.now() };
+  ls.set("xero_users", users); _u = null; login(name);
+}
+async function signIn(name, pw) {
+  const u = ls.get("xero_users", {})[name.toLowerCase()];
+  if (!u || u.h !== await hash(pw, u.salt)) throw new Error("Wrong username or password.");
+  login(u.name);
+}
+let after = null;   // page to open once the person signs in
+function login(name) {
+  me = name; ls.set("xero_session", me); renderAcct();
+  if (after) { const a = after; after = null; if (location.hash !== a) { location.hash = a; return; } }
+  route();
+}
+function logout() {
+  me = null; ls.set("xero_session", null); renderAcct();
+  if (["#/settings", "#/upload"].includes(location.hash)) location.hash = "#/"; else route();
+}
+function renderAcct() {
+  $("#acct").innerHTML = me
+    ? `<div class="menu"><button id="avBtn" aria-label="Account menu" aria-haspopup="true">${av(me)}</button>
+        <div class="dd" id="dd"><div class="who2"><b>${esc(dn(me))}</b><div class="meta">@${esc(me)}</div></div>
+          <a href="#/channel/${encodeURIComponent(me)}">Your channel</a>
+          <a href="#/settings">Settings</a>
+          <button data-f="subs">Subscriptions</button>
+          <button data-f="liked">Liked videos</button>
+          <button id="out">Sign out</button></div></div>`
+    : `<button class="btn" id="inBtn">Sign in</button>`;
+  if (me) $("#out").onclick = logout; else $("#inBtn").onclick = () => openAuth();
+}
+
+/* ---------- auth modal ---------- */
+let mode = "in";
+function openAuth(msg, next) {
+  after = next || null;
+  $("#authSub").textContent = msg || "Sign in to upload, like and comment.";
+  $("#authErr").textContent = ""; $("#authBack").classList.add("open"); $("#u").focus();
+}
+function setMode(m) {
+  mode = m; $("#tabIn").classList.toggle("on", m === "in"); $("#tabUp").classList.toggle("on", m === "up");
+  $("#authGo").textContent = m === "in" ? "Sign in" : "Create account";
+  $("#p").autocomplete = m === "in" ? "current-password" : "new-password";
+}
+$("#tabIn").onclick = () => setMode("in"); $("#tabUp").onclick = () => setMode("up");
+$("#authCancel").onclick = () => { after = null; $("#authBack").classList.remove("open"); };
+$("#authForm").onsubmit = async e => {
+  e.preventDefault();
+  const n = $("#u").value.trim(), p = $("#p").value;
+  if (!/^[\w.-]{2,20}$/.test(n)) { $("#authErr").textContent = "Use 2-20 letters, numbers, dots, dashes or underscores."; return; }
+  try {
+    if (!crypto.subtle) throw new Error("Open this page with Live Server (needs localhost).");
+    await (mode === "in" ? signIn(n, p) : signUp(n, p));
+    $("#authBack").classList.remove("open"); $("#authForm").reset();
+  } catch (err) { $("#authErr").textContent = err.message; }
+};
+
+/* ---------- upload page ---------- */
+$("#uploadBtn").onclick = () => me ? (location.hash = "#/upload") : openAuth("Sign in to upload videos.", "#/upload");
+
+// crop any image or video frame to a 4:3 thumbnail
+function cover(src, sw, sh, W = 480, H = 360) {
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const k = Math.max(W / sw, H / sh), w = sw * k, h = sh * k;
+  c.getContext("2d").drawImage(src, (W - w) / 2, (H - h) / 2, w, h);
+  return c.toDataURL("image/jpeg", .78);
+}
+const seek = (v, t) => new Promise(r => { v.onseeked = () => r(); v.currentTime = t; });
+async function grabFrames(file) {
+  const url = URL.createObjectURL(file), v = document.createElement("video");
+  v.muted = true; v.preload = "auto"; v.src = url;
+  try {
+    await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error("Your browser can't read this video file.")); });
+    const dur = isFinite(v.duration) ? v.duration : 0, frames = [];
+    for (const f of [0.1, 0.5, 0.85]) {
+      await seek(v, dur ? dur * f : 0.1 + f);
+      frames.push(cover(v, v.videoWidth, v.videoHeight));
+    }
+    return { frames, dur };
+  } finally { URL.revokeObjectURL(url); }
+}
+const loadImg = (f, W, H) => new Promise((ok, no) => {
+  const i = new Image(), u = URL.createObjectURL(f);
+  i.onload = () => { const d = cover(i, i.naturalWidth, i.naturalHeight, W, H); URL.revokeObjectURL(u); ok(d); };
+  i.onerror = () => no(new Error("That image can't be read."));
+  i.src = u;
+});
+
+let pvUrl = null;
+function uploadView() {
+  if (!me) { openAuth("Sign in to upload videos.", "#/upload"); location.hash = "#/"; return; }
+  const S = { file: null, frames: [], custom: null, pick: 0, dur: 0 };
+  const list = () => [...S.frames, ...(S.custom ? [S.custom] : [])];
+  $("#app").innerHTML = `
+    <div class="studio">
+      <h1>Upload a video</h1>
+      <p class="lead">Videos are saved in this browser for now.</p>
+      <div class="sgrid">
+        <div>
+          <label class="drop" id="drop" for="file"><strong>Drop a video here</strong><span>or click to choose a file</span></label>
+          <input id="file" type="file" accept="video/*" hidden>
+          <video id="pv" controls hidden></video>
+          <button type="button" class="btn" id="swap" hidden>Choose a different video</button>
+        </div>
+        <div>
+          <div class="field"><label for="title">Title <small id="tc">0/100</small></label><input id="title" maxlength="100"></div>
+          <div class="field"><label for="desc">Description <small id="dc">0/1000</small></label><textarea id="desc" maxlength="1000"></textarea></div>
+          <div class="field"><div class="lbl">Thumbnail</div><div class="tstrip" id="ts"></div><input id="timg" type="file" accept="image/*" hidden></div>
+          <div class="field"><div class="lbl">How it will look</div>
+            <div class="card pcard"><div class="thumb" id="pt"><span class="dur" id="pd">0:00</span></div>
+              <h3 id="ph">Untitled</h3><div class="meta">${esc(dn(me))} · 0 views · just now</div></div></div>
+          <div class="err" id="upErr" role="alert"></div>
+          <div class="pubrow"><button class="btn fill" id="pub">Publish</button><a href="#/" class="btn">Cancel</a></div>
+        </div>
+      </div>
+    </div>`;
+
+  const drawThumbs = () => {
+    const t = list();
+    $("#ts").innerHTML = t.map((x, i) => `<button type="button" class="tpick" data-i="${i}" aria-pressed="${i === S.pick}" aria-label="Thumbnail ${i + 1}" style="background-image:url('${x}')"></button>`).join("")
+      + `<button type="button" class="tpick add" id="addT">Upload image</button>`;
+    $("#pt").style.backgroundImage = t[S.pick] ? `url('${t[S.pick]}')` : "";
+    $("#pd").textContent = fmt(S.dur);
+  };
+  drawThumbs();
+
+  async function setFile(f) {
+    if (!f) return;
+    if (!f.type.startsWith("video/")) { $("#upErr").textContent = "That isn't a video file."; return; }
+    $("#upErr").textContent = ""; S.file = f;
+    if (pvUrl) URL.revokeObjectURL(pvUrl);
+    pvUrl = URL.createObjectURL(f);
+    $("#pv").src = pvUrl; $("#pv").hidden = false; $("#swap").hidden = false; $("#drop").hidden = true;
+    if (!$("#title").value) {
+      $("#title").value = f.name.replace(/\.[^.]+$/, "").slice(0, 100);
+      $("#tc").textContent = $("#title").value.length + "/100"; $("#ph").textContent = $("#title").value || "Untitled";
+    }
+    try { const g = await grabFrames(f); S.frames = g.frames; S.dur = g.dur; S.pick = 0; }
+    catch (err) { $("#upErr").textContent = err.message; }
+    drawThumbs();
+  }
+  const dz = $("#drop");
+  ["dragenter", "dragover"].forEach(n => dz.addEventListener(n, e => { e.preventDefault(); dz.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(n => dz.addEventListener(n, e => { e.preventDefault(); dz.classList.remove("over"); }));
+  dz.addEventListener("drop", e => setFile(e.dataTransfer.files[0]));
+  $("#file").onchange = e => setFile(e.target.files[0]);
+  $("#swap").onclick = () => $("#file").click();
+
+  $("#title").oninput = e => { $("#tc").textContent = e.target.value.length + "/100"; $("#ph").textContent = e.target.value || "Untitled"; };
+  $("#desc").oninput = e => { $("#dc").textContent = e.target.value.length + "/1000"; };
+
+  $("#ts").onclick = e => {
+    const b = e.target.closest(".tpick"); if (!b) return;
+    if (b.id === "addT") return $("#timg").click();
+    S.pick = +b.dataset.i; drawThumbs();
+  };
+  $("#timg").onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try {
+      if (!f.type.startsWith("image/")) throw new Error("Thumbnails must be image files.");
+      S.custom = await loadImg(f); S.pick = S.frames.length; $("#upErr").textContent = "";
+    } catch (err) { $("#upErr").textContent = err.message; }
+    drawThumbs();
+  };
+
+  $("#pub").onclick = async () => {
+    const title = $("#title").value.trim();
+    if (!S.file) { $("#upErr").textContent = "Choose a video first."; return; }
+    if (!title) { $("#upErr").textContent = "Add a title."; $("#title").focus(); return; }
+    $("#pub").disabled = true; $("#pub").textContent = "Publishing…";
+    try {
+      const id = uid();
+      await idb("blobs", "readwrite", s => s.put(S.file, id));
+      await idb("meta", "readwrite", s => s.put({ id, title, desc: $("#desc").value.trim(), owner: me, at: Date.now(),
+        plays: 0, likes: [], comments: [], viewers: [], thumb: list()[S.pick] || "", dur: S.dur }));
+      location.hash = "#/watch/" + id;
+    } catch (err) {
+      $("#upErr").textContent = "Could not save the video: " + err.message;
+      $("#pub").disabled = false; $("#pub").textContent = "Publish";
+    }
+  };
+}
+
+/* ---------- views ---------- */
+let filter = "new", query = "";
+const thumbStyle = v => v.thumb ? `style="background-image:url('${v.thumb}')"` : "";
+async function allVideos() { return (await idb("meta", "readonly", s => s.getAll())) || []; }
+
+const cardHTML = v => `
+  <div class="card" data-id="${v.id}" tabindex="0" role="link" aria-label="${esc(v.title)}">
+    <div class="thumb" ${thumbStyle(v)}><span class="dur">${fmt(v.dur)}</span></div>
+    <div class="cinfo"><span data-ch="${esc(v.owner)}">${av(v.owner)}</span>
+      <div><h3>${esc(v.title)}</h3><div class="meta">${esc(dn(v.owner))} · ${v.plays} view${v.plays === 1 ? "" : "s"} · ${ago(v.at)}</div></div></div>
+  </div>`;
+
+async function home() {
+  if (!me && ["mine", "liked", "subs"].includes(filter)) filter = "new";
+  let vids = await allVideos();
+  if (query) vids = vids.filter(v => v.title.toLowerCase().includes(query.toLowerCase()));
+  if (filter === "mine") vids = vids.filter(v => v.owner === me);
+  if (filter === "liked") vids = vids.filter(v => v.likes.includes(me));
+  if (filter === "subs") { const mine = subsOf(me); vids = vids.filter(v => mine.includes(v.owner)); }
+  vids.sort((a, b) => filter === "top" ? b.plays - a.plays : b.at - a.at);
+  const none = { mine: "You haven't uploaded anything yet", liked: "No liked videos yet", subs: "Nothing from your subscriptions" }[filter] || "Nothing here yet";
+  $("#app").innerHTML = `
+    <div class="chips">${[["new","Newest"],["top","Most viewed"],["subs","Subscriptions"],["liked","Liked"],["mine","My videos"]].map(([k, n]) =>
+      `<button class="chip ${filter === k ? "on" : ""}" data-f="${k}">${n}</button>`).join("")}</div>
+    <div class="grid">${vids.length ? vids.map(cardHTML).join("") : `<div class="empty"><h2>${none}</h2>
+      <p>${query ? "No videos match your search." : filter === "subs" ? "Subscribe to a channel and its videos show up here." : "Be the first: hit Upload and share a video."}</p></div>`}</div>`;
+}
+
+async function channel(name) {
+  const p = users()[name.toLowerCase()];
+  if (!p) { $("#app").innerHTML = `<div class="grid"><div class="empty"><h2>Channel not found</h2><p><a href="#/">Back to home</a></p></div></div>`; return; }
+  const owner = p.name, vids = (await allVideos()).filter(v => v.owner === owner).sort((a, b) => b.at - a.at);
+  let tab = "videos";
+  const draw = () => {
+    const on = me && subs(owner).includes(me), views = vids.reduce((n, v) => n + v.plays, 0);
+    $("#app").innerHTML = `
+      <div class="ban" ${p.banner ? `style="background-image:url('${p.banner}')"` : ""}></div>
+      <div class="chead">${av(owner, true)}
+        <div style="flex:1;min-width:200px"><h1>${esc(dn(owner))}</h1>
+          <div class="meta">@${esc(owner)} · ${subLabel(owner)} · ${vids.length} video${vids.length === 1 ? "" : "s"}</div></div>
+        ${me === owner ? `<a class="btn" href="#/settings">Edit channel</a>`
+          : `<button class="btn ${on ? "" : "coral"}" id="sub">${on ? "Subscribed" : "Subscribe"}</button>`}</div>
+      <div class="chips"><button class="chip ${tab === "videos" ? "on" : ""}" data-t="videos">Videos</button>
+        <button class="chip ${tab === "about" ? "on" : ""}" data-t="about">About</button></div>
+      ${tab === "videos" ? `<div class="grid">${vids.map(cardHTML).join("") || `<div class="empty"><h2>No videos yet</h2></div>`}</div>`
+        : `<div class="studio"><div class="desc">${p.bio ? esc(p.bio) : "This channel hasn't added a description."}</div>
+           <p class="meta">${p.at ? "Joined " + new Date(p.at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) + " · " : ""}${views} total view${views === 1 ? "" : "s"}</p></div>`}`;
+    $("#app").querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
+    if ($("#sub")) $("#sub").onclick = () => { if (toggleSub(owner)) draw(); };
+  };
+  draw();
+}
+
+function settings() {
+  if (!me) { openAuth("Sign in to edit your channel.", "#/settings"); location.hash = "#/"; return; }
+  const p = prof(me), S = { display: p.display || "", bio: p.bio || "", pfp: p.pfp || "", banner: p.banner || "" };
+  $("#app").innerHTML = `
+    <div class="studio" style="max-width:720px">
+      <h1>Channel settings</h1>
+      <p class="lead">Your picture and name show next to your videos and comments.</p>
+      <div class="field"><div class="lbl">Profile picture</div>
+        <div class="prow"><span id="pfpBox"></span><button type="button" class="btn" id="pfpPick">Upload picture</button><button type="button" class="btn" id="pfpDel">Remove</button></div>
+        <input id="pfpFile" type="file" accept="image/*" hidden></div>
+      <div class="field"><div class="lbl">Banner</div>
+        <div class="ban" id="banBox" style="border:2px solid var(--ink);border-radius:12px;height:110px"></div>
+        <div class="prow" style="margin-top:8px"><button type="button" class="btn" id="banPick">Upload banner</button><button type="button" class="btn" id="banDel">Remove</button></div>
+        <input id="banFile" type="file" accept="image/*" hidden></div>
+      <div class="field"><label for="dname">Channel name <small id="dnc">0/30</small></label><input id="dname" maxlength="30" placeholder="${esc(me)}"></div>
+      <div class="field"><div class="lbl">Username</div><div class="meta" style="margin:0">@${esc(me)} (used to sign in, can't be changed)</div></div>
+      <div class="field"><label for="bio">About <small id="bc">0/300</small></label><textarea id="bio" maxlength="300"></textarea></div>
+      <div class="err" id="setMsg" role="status"></div>
+      <div class="pubrow"><button class="btn fill" id="save">Save</button><a class="btn" href="#/channel/${encodeURIComponent(me)}">View channel</a></div>
+    </div>`;
+  const draw = () => {
+    $("#pfpBox").innerHTML = `<span class="av lg">${S.pfp ? `<img src="${S.pfp}" alt="">` : esc((S.display.trim() || me)[0].toUpperCase())}</span>`;
+    $("#banBox").style.backgroundImage = S.banner ? `url('${S.banner}')` : "";
+  };
+  $("#dname").value = S.display; $("#bio").value = S.bio;
+  $("#dnc").textContent = S.display.length + "/30"; $("#bc").textContent = S.bio.length + "/300";
+  draw();
+  const pick = (btn, file, key, W, H) => {
+    $(btn).onclick = () => $(file).click();
+    $(file).onchange = async e => {
+      const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+      try { if (!f.type.startsWith("image/")) throw new Error("Choose an image file."); S[key] = await loadImg(f, W, H); $("#setMsg").textContent = ""; draw(); }
+      catch (err) { $("#setMsg").style.color = ""; $("#setMsg").textContent = err.message; }
+    };
+  };
+  pick("#pfpPick", "#pfpFile", "pfp", 256, 256); pick("#banPick", "#banFile", "banner", 1200, 300);
+  $("#pfpDel").onclick = () => { S.pfp = ""; draw(); };
+  $("#banDel").onclick = () => { S.banner = ""; draw(); };
+  $("#dname").oninput = e => { S.display = e.target.value; $("#dnc").textContent = S.display.length + "/30"; draw(); };
+  $("#bio").oninput = e => { S.bio = e.target.value; $("#bc").textContent = S.bio.length + "/300"; };
+  $("#save").onclick = () => {
+    const us = users(), k = me.toLowerCase();
+    us[k] = { ...us[k], display: S.display.trim(), bio: S.bio.trim(), pfp: S.pfp, banner: S.banner };
+    const ok = ls.set("xero_users", us); _u = null;
+    $("#setMsg").style.color = ok ? "var(--blue)" : "";
+    $("#setMsg").textContent = ok ? "Saved." : "Couldn't save: browser storage is full. Try a smaller image.";
+    if (ok) renderAcct();
+  };
+}
+
+let currentUrl = null;
+async function watch(id) {
+  const m = await idb("meta", "readonly", s => s.get(id));
+  if (!m) { $("#app").innerHTML = `<div class="grid"><div class="empty"><h2>Video not found</h2><p><a href="#/">Back to home</a></p></div></div>`; return; }
+  const blob = await idb("blobs", "readonly", s => s.get(id));
+  if (currentUrl) URL.revokeObjectURL(currentUrl);
+  currentUrl = blob ? URL.createObjectURL(blob) : "";
+  const others = (await allVideos()).filter(v => v.id !== id).sort((a, b) => b.at - a.at).slice(0, 8);
+  const liked = me && m.likes.includes(me), isSub = me && subs(m.owner).includes(me);
+  $("#app").innerHTML = `
+    <div class="watch"><div>
+      <video id="vid" src="${currentUrl}" controls autoplay></video>
+      <h1>${esc(m.title)}</h1>
+      <div class="meta" style="margin-bottom:12px"><span id="plays">${m.plays}</span> view${m.plays === 1 ? "" : "s"} · ${ago(m.at)}</div>
+      <div class="bar">
+        <span data-ch="${esc(m.owner)}" style="cursor:pointer">${av(m.owner)}</span>
+        <div class="meta"><b style="color:var(--ink)">${esc(dn(m.owner))}</b><br><span id="subn">${subLabel(m.owner)}</span></div>
+        ${me === m.owner ? "" : `<button class="btn ${isSub ? "" : "coral"}" id="sub">${isSub ? "Subscribed" : "Subscribe"}</button>`}
+        <button class="btn like ${liked ? "on" : ""}" id="like">♥ ${m.likes.length}</button>
+        <button class="btn" id="share">Share</button>
+        ${me === m.owner ? `<button class="btn" id="del">Delete</button>` : ""}
+      </div>
+      ${m.desc ? `<div class="desc">${esc(m.desc)}</div>` : ""}
+      <div class="comments"><h3>${m.comments.length} comment${m.comments.length === 1 ? "" : "s"}</h3>
+        <form class="cform" id="cf"><input id="ci" maxlength="300" placeholder="${me ? "Add a comment" : "Sign in to comment"}" ${me ? "" : "readonly"} aria-label="Comment">
+          <button class="btn fill">Post</button></form>
+        ${m.comments.map((c, i) => ({ c, i })).reverse().map(({ c, i }) => `<div class="c"><span data-ch="${esc(c.u)}">${av(c.u)}</span>
+          <div><b>${esc(dn(c.u))}</b><small>${ago(c.at)}</small>${c.u === me ? `<button class="cdel" data-cd="${i}">Delete</button>` : ""}<div>${esc(c.t)}</div></div></div>`).join("")}
+      </div></div>
+      <div class="next"><h3>Up next</h3>${others.map(v => `
+        <div class="mini" data-id="${v.id}"><div class="thumb" ${thumbStyle(v)}></div>
+          <div><h4>${esc(v.title)}</h4><div class="meta">${esc(dn(v.owner))}<br>${v.plays} views</div></div></div>`).join("") || `<p class="meta">No other videos yet.</p>`}</div>
+    </div>`;
+  const save = () => idb("meta", "readwrite", s => s.put(m));
+  let counted = false;
+  $("#vid").onplay = async () => {
+    if (counted) return; counted = true;
+    const keys = ["d:" + device, ...(me ? ["u:" + me] : [])];   // this browser + this account
+    m.viewers = m.viewers || [];
+    if (keys.some(k => m.viewers.includes(k))) return;            // already counted this person
+    m.viewers.push(...keys); m.plays++; $("#plays").textContent = m.plays; await save();
+  };
+  $("#like").onclick = async () => {
+    if (!me) return openAuth("Sign in to like videos.");
+    m.likes = liked ? m.likes.filter(x => x !== me) : [...m.likes, me]; await save(); watch(id);
+  };
+  if ($("#sub")) $("#sub").onclick = () => {
+    if (!toggleSub(m.owner)) return;
+    const on = subs(m.owner).includes(me);
+    $("#sub").textContent = on ? "Subscribed" : "Subscribe"; $("#sub").classList.toggle("coral", !on); $("#subn").textContent = subLabel(m.owner);
+  };
+  $("#share").onclick = () => navigator.clipboard.writeText(location.href).then(() => {
+    $("#share").textContent = "Link copied"; setTimeout(() => { if ($("#share")) $("#share").textContent = "Share"; }, 1500);
+  });
+  $("#app").querySelectorAll("[data-cd]").forEach(b => b.onclick = async () => { m.comments.splice(+b.dataset.cd, 1); await save(); watch(id); });
+  $("#cf").onsubmit = async e => {
+    e.preventDefault();
+    if (!me) return openAuth("Sign in to comment.");
+    const t = $("#ci").value.trim(); if (!t) return;
+    m.comments.push({ u: me, t, at: Date.now() }); await save(); watch(id);
+  };
+  if ($("#del")) $("#del").onclick = async () => {
+    if (!confirm("Delete this video for good?")) return;
+    await idb("meta", "readwrite", s => s.delete(id)); await idb("blobs", "readwrite", s => s.delete(id)); location.hash = "#/";
+  };
+}
+
+function route() {
+  const h = location.hash;
+  if (pvUrl && h !== "#/upload") { URL.revokeObjectURL(pvUrl); pvUrl = null; }
+  if (h === "#/upload") uploadView();
+  else if (h === "#/settings") settings();
+  else if (h.startsWith("#/channel/")) channel(decodeURIComponent(h.slice(10)));
+  else if (h.startsWith("#/watch/")) watch(h.slice(8)); else home();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+document.addEventListener("click", e => {
+  const dd = $("#dd");
+  if (e.target.closest("#avBtn")) { dd.classList.toggle("open"); return; }
+  if (dd) dd.classList.remove("open");
+  const chip = e.target.closest("[data-f]");
+  if (chip) {
+    if (["mine", "subs", "liked"].includes(chip.dataset.f) && !me) return openAuth("Sign in to see this.");
+    filter = chip.dataset.f;
+    if (location.hash === "#/" || location.hash === "") return home();
+    location.hash = "#/"; return;
+  }
+  const ch = e.target.closest("[data-ch]"); if (ch) { location.hash = "#/channel/" + encodeURIComponent(ch.dataset.ch); return; }
+  const c = e.target.closest("[data-id]"); if (c) location.hash = "#/watch/" + c.dataset.id;
+});
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("card")) location.hash = "#/watch/" + e.target.dataset.id; });
+$("#q").addEventListener("input", e => { query = e.target.value; if (location.hash !== "#/" && location.hash !== "") location.hash = "#/"; else home(); });
+
+renderAcct(); route();
+</script>
+</body>
+</html>
